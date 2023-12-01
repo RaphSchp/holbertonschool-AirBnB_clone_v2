@@ -1,46 +1,48 @@
 #!/usr/bin/python3
-""" Place Module for HBNB project """
-from os import getenv
+""" Review module for the HBNB  """
 from models.base_model import BaseModel, Base
+from sqlalchemy import Column, String, ForeignKey, Integer, Float, Table
 from sqlalchemy.orm import relationship
-from sqlalchemy import Column, String, Integer, Float, ForeignKey, null, Table
+from os import getenv
+
+storage_type = getenv("HBNB_TYPE_STORAGE")
+
+
+if storage_type == 'db':
+    metadata = Base.metadata
+    place_amenity = Table("place_amenity", metadata,
+                          Column('place_id', String(60),
+                                 ForeignKey('places.id'),
+                                 nullable=False),
+                          Column('amenity_id', String(60),
+                                 ForeignKey('amenities.id'),
+                                 nullable=False))
 
 
 class Place(BaseModel, Base):
-    """ A place to stay """
-    storage_engine = getenv('HBNB_TYPE_STORAGE')
-    if storage_engine is None:
-        storage_engine = "db"
-
-    if storage_engine == "db":
-        __tablename__ = 'places'
-
-        place_amenity = Table(
-            'place_amenity',
-            Base.metadata,
-            Column('place_id', String(60), ForeignKey('places.id'),
-                nullable=False, primary_key=True),
-            Column('amenity_id', String(60), ForeignKey('amenities.id'),
-                nullable=False, primary_key=True),
-            extend_existing=True
-        )
-
-        city_id = Column(String(60), ForeignKey('cities.id'), nullable=False)
-        user_id = Column(String(60), ForeignKey('users.id'), nullable=False)
+    """
+        Define the class Place that inherits from BaseModel.
+    """
+    __tablename__ = 'places'
+    if storage_type == 'db':
+        city_id = Column(String(60), ForeignKey("cities.id"), nullable=False)
+        user_id = Column(String(60), ForeignKey("users.id"), nullable=False)
         name = Column(String(128), nullable=False)
-        description = Column(String(1024), nullable=True, default=null())
-        number_rooms = Column(Integer, nullable=False, default=0)
-        number_bathrooms = Column(Integer, nullable=False, default=0)
-        max_guest = Column(Integer, nullable=False, default=0)
-        price_by_night = Column(Integer, nullable=False, default=0)
-        latitude = Column(Float, nullable=True, default=null())
-        longitude = Column(Float, nullable=True, default=null())
-        user = relationship("User", back_populates="places")
-        cities = relationship("City", back_populates="places")
-        reviews = relationship("Review", back_populates="place",
-                               cascade="delete, delete-orphan")
+        description = Column(String(1024), nullable=True)
+        number_rooms = Column(Integer, default=0, nullable=False)
+        number_bathrooms = Column(Integer, default=0, nullable=False)
+        max_guest = Column(Integer, default=0, nullable=False)
+        price_by_night = Column(Integer, default=0, nullable=False)
+        latitude = Column(Float, nullable=True)
+        longitude = Column(Float, nullable=True)
+        amenity_ids = []
+        reviews = relationship("Review", backref="place",
+                               cascade="all, delete-orphan")
+
         amenities = relationship("Amenity", secondary=place_amenity,
-                                 viewonly=False, overlaps="place_amenities")
+                                 back_populates="place_amenities",
+                                 viewonly=False)
+
     else:
         city_id = ""
         user_id = ""
@@ -54,48 +56,38 @@ class Place(BaseModel, Base):
         longitude = 0.0
         amenity_ids = []
 
+    if storage_type != 'db':
         @property
         def reviews(self):
-            """FileStorage Getter that returns
-
-                Returns:
-                    List of Reviews with place_id of current instance id
             """
-            from models.__init__ import storage
-
-            data = storage.all()
-            filtered = []
-            for k, v in data.items():
-                if k.split('.')[0] == "Reviews" and self.id == v.id:
-                    filtered.append(v)
-
-            return filtered
+            get list of Review instances with
+            place_id equals to the current Place.id
+            """
+            list_reviews = []
+            all_reviews = self.reviews
+            for review in all_reviews:
+                if review.place_id == Place.id:
+                    list_reviews.append(review)
+            return list_reviews
 
         @property
         def amenities(self):
-            """FileStorage Getter that returns
-
-                Returns:
-                    List of Amenities whose ids are in amenity_ids
             """
-            from models.__init__ import storage
-
-            data = storage.all()
-            filtered = []
-            for k, v in data.items():
-                if k.split('.')[0] == "Amenities" and v.id in self.amenity_ids:
-                    filtered.append(v)
-
-            return filtered
+            returns the list of Amenity instances based on the attribute
+            amenity_ids that contains all Amenity.id linked to the Place
+            """
+            amenity_objs = []
+            for amenity_id in self.amenity_ids:
+                key = 'Amenity.' + amenity_id
+                if key in FileStorage.__objects:
+                    amenity_objs.append(FileStorage.__objects[key])
+            return amenity_objs
 
         @amenities.setter
         def amenities(self, obj):
-            """Appends to the ids list of amenities.
-
-                Returns:
-                    Nothing
             """
-
-            if str(type(obj).__name__) == 'Amenity':
+            adds an Amenity.id to the attribute amenity_ids if obj is
+            an instance of Amenity
+            """
+            if isinstance(obj, Amenity):
                 self.amenity_ids.append(obj.id)
-                
