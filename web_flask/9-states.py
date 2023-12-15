@@ -1,41 +1,50 @@
 #!/usr/bin/python3
-''' 
-This is a Flask web application for handling states and cities.
-
-It includes routes for displaying a list of states and information about a specific state.
-
-Author: Your Name
+'''A simple Flask web application.
 '''
+from flask import Flask, render_template
 
-from flask import Flask
-from flask import render_template
 from models import storage
 from models.state import State
-from models.city import City
-from models.engine.file_storage import FileStorage
-from models.engine.db_storage import DBStorage
+
 
 app = Flask(__name__)
+'''The Flask application instance.'''
+app.url_map.strict_slashes = False
 
-@app.route('/states', strict_slashes=False)
-def state_ls():
-    '''Displays a list of all states.'''
-    states = storage.all("State").values()
-    return render_template('9-states.html', states=states, mode='all')
 
-@app.route('/states/<id>', strict_slashes=False)
-def state_id(id):
-    '''Displays information about a specific state based on the provided ID.'''
-    states = storage.all("State").values()
-    for state in states:
-        if state.id == id:
-            return render_template('9-states.html', states=state, mode='id')
-    return render_template('9-states.html', states=state, mode=';')
+@app.route('/states')
+@app.route('/states/<id>')
+def states(id=None):
+    '''The states page.'''
+    states = None
+    state = None
+    all_states = list(storage.all(State).values())
+    case = 404
+    if id is not None:
+        res = list(filter(lambda x: x.id == id, all_states))
+        if len(res) > 0:
+            state = res[0]
+            state.cities.sort(key=lambda x: x.name)
+            case = 2
+    else:
+        states = all_states
+        for state in states:
+            state.cities.sort(key=lambda x: x.name)
+        states.sort(key=lambda x: x.name)
+        case = 1
+    ctxt = {
+        'states': states,
+        'state': state,
+        'case': case
+    }
+    return render_template('9-states.html', **ctxt)
+
 
 @app.teardown_appcontext
-def storage_close(self):
-    '''Closes the storage connection after each request.'''
+def flask_teardown(exc):
+    '''The Flask app/request context end event listener.'''
     storage.close()
 
-if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000)
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port='5000')
